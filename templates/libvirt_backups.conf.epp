@@ -1,0 +1,11 @@
+<%- |
+   Array $backup_list
+| -%>
+# This file created by puppet, changes will be over written at the next
+# puppet run, which is probably real soon
+# This file is a list of libvirt virtual machines to backup on this
+# server.
+# VM Name, # of backups to keep, backup directory,quiesce
+<% $backup_list.each | String[5] $line | { %>
+<%= $line %>
+<% } -%>

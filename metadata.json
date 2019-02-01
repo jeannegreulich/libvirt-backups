@@ -1,0 +1,46 @@
+{
+  "name": "libvirt_backups",
+  "version": "0.1.0",
+  "author": "SIMP Team",
+  "summary": "manages scripts for vm backups",
+  "license": "Apache-2.0",
+  "source": "https://github.com/jeannegreulich/libvirt_backups",
+  "project_page": "https://github.com/jeannegreulich/libvirt_backups",
+  "issues_url": "https://github.com/jeannegreulich/libvirt_backups",
+  "tags": [
+    "libvirt",
+    "backups"
+  ],
+  "dependencies": [
+    {
+      "name": "simp/simplib",
+      "version_requirement": ">= 3.9.0 < 4.0.0"
+    },
+    {
+      "name": "simplib/stdlib",
+      "version_requirement": ">= 4.13.1 < 5.0.0"
+    }
+  ],
+  "operatingsystem_support": [
+    {
+      "operatingsystem": "CentOS",
+      "operatingsystemrelease": [
+        "6",
+        "7"
+      ]
+    },
+    {
+      "operatingsystem": "RedHat",
+      "operatingsystemrelease": [
+        "6",
+        "7"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "name": "puppet",
+      "version_requirement": ">= 5.5.7 < 6.0.0"
+    }
+  ]
+}
