@@ -1,15 +1,39 @@
 
 class libvirt_backups::client (
-Stdlib::Absolutepath  $installdir    = '/usr/local/bin/libvirt_backups',
-Stdlib::Absolutepath  $configfile    = '/etc/libvirt_backups.conf',
-Stdlib::Absolutepath  $backup_dir    = '/var/backups',
-String                $vmbackupuser  = 'lvbackup',
-Integer               $backupuid     = 832,
-Simplib::Hostname     $backupserver,
-Boolean               $isserver      = false,
-Optional[Hash]        $backups       = undef
+Stdlib::Absolutepath           $installdir    = '/usr/local/bin/libvirt_backups',
+Stdlib::Absolutepath           $configfile    = '/etc/libvirt_backups.conf',
+Stdlib::Absolutepath           $backup_dir    = '/var/backups',
+String                         $vmbackupuser  = 'lvbackup',
+Integer                        $backupuid     = 832,
+Optional[Simplib::Hostname ]   $backupserver  = undef,
+Boolean                        $isserver      = false,
+Optional[Hash]                 $backups       = undef
 )
 {
+
+  file { $backup_dir:
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'administrators',
+    mode   => '0660'
+  }
+
+  ensure_resource ( file, $installdir,
+  {
+    ensure => 'directory',
+    mode   => 'ug+rX'
+  })
+
+  file { "${installdir}/libvirt_backups" :
+    ensure  => 'directory',
+    owner   => 'root',
+    group   => 'administrators',
+    mode    => '0660',
+    source  => 'puppet:///modules/libvirt_backups',
+    recurse => true,
+    require => File[$installdir]
+  } 
+
 
   if $backups {
     $_backup_list = $backups.map | String $vm_name, Hash $options | {
@@ -22,7 +46,7 @@ Optional[Hash]        $backups       = undef
       $_num = has_key($options,'number') ? {
         true    => $options['number'],
         default => '' }
-      join([$vm_name,$_num,$_backup_dir,$_quiesce],",")
+      join([$vm_name,$_num,$_backup_dir,$_quiesce],',')
     }
 
     file { $configfile:
@@ -33,7 +57,7 @@ Optional[Hash]        $backups       = undef
     }
 
     cron { "Libvirt backups":
-      command     => "${installdir}/libvirt_backup_cron.rb",
+      command     => "${installdir}/libvirt_backsups/libvirt_backup_cron.rb",
       user        => 'root',
       weekday     => 'Saturday',
       hour        => 1,
