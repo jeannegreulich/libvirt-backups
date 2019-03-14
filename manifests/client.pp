@@ -18,22 +18,15 @@ Optional[Hash]                 $backups       = undef
     mode   => '0660'
   }
 
-  ensure_resource ( file, $installdir,
-  {
-    ensure => 'directory',
-    mode   => 'ug+rX'
-  })
 
-  file { "${installdir}/libvirt_backups" :
+  file { $installdir :
     ensure  => 'directory',
     owner   => 'root',
     group   => 'administrators',
-    mode    => '0660',
-    source  => 'puppet:///modules/libvirt_backups',
+    source  => 'puppet:///modules/libvirt_backups/scripts/',
     recurse => true,
-    require => File[$installdir]
+    mode    => '0750',
   } 
-
 
   if $backups {
     $_backup_list = $backups.map | String $vm_name, Hash $options | {

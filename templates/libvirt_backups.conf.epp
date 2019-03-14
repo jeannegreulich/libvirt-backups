@@ -6,6 +6,6 @@
 # This file is a list of libvirt virtual machines to backup on this
 # server.
 # VM Name, # of backups to keep, backup directory,quiesce
-<% $backup_list.each | String[5] $line | { %>
+<% $backup_list.each | String[5] $line | { -%>
 <%= $line %>
 <% } -%>
