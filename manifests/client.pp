@@ -50,7 +50,7 @@ Optional[Hash]                 $backups       = undef
     }
 
     cron { "Libvirt backups":
-      command     => "${installdir}/libvirt_backsups/libvirt_backup_cron.rb",
+      command     => "${installdir}/libvirt_backup_cron.rb",
       user        => 'root',
       weekday     => 'Saturday',
       hour        => 1,
