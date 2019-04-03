@@ -1,15 +1,19 @@
 
 class libvirt_backups::client (
-Stdlib::Absolutepath           $installdir    = '/usr/local/bin/libvirt_backups',
-Stdlib::Absolutepath           $configfile    = '/etc/libvirt_backups.conf',
-Stdlib::Absolutepath           $backup_dir    = '/var/backups',
-String                         $vmbackupuser  = 'lvbackup',
-Integer                        $backupuid     = 832,
-Optional[Simplib::Hostname ]   $backupserver  = undef,
-Boolean                        $isserver      = false,
-Optional[Hash]                 $backups       = undef
+Stdlib::Absolutepath           $installdir     = '/usr/local/bin/libvirt_backups',
+Stdlib::Absolutepath           $configfile     = '/etc/libvirt_backups.conf',
+Stdlib::Absolutepath           $backup_dir     = '/var/backup',
+Integer[1,10]                  $defnum_backups = 3,
+Enum['yes', 'no']              $def_quiesce    = 'no',
+Optional[Hash]                 $backups        = undef
 )
 {
+
+  $default_options = {
+    'backup_dir' => $backup_dir,
+    'quiesce'    => $def_quiesce,
+    'number'     => $defnum_backups
+  }
 
   file { $backup_dir:
     ensure => 'directory',
@@ -18,28 +22,36 @@ Optional[Hash]                 $backups       = undef
     mode   => '0660'
   }
 
-
   file { $installdir :
-    ensure  => 'directory',
+    ensure => 'directory',
+    owner  => 'root',
+    group  => 'administrators',
+    mode   => '0750',
+  }
+
+  file { "${installdir}/libvirt_backup.sh":
+    ensure  => 'file',
     owner   => 'root',
     group   => 'administrators',
-    source  => 'puppet:///modules/libvirt_backups/scripts/',
-    recurse => true,
     mode    => '0750',
-  } 
+    content => epp("${module_name}/scripts/libvirt_backup.sh.epp")
+  }
+
+  file { "${installdir}/libvirt_backup_cron.rb":
+    ensure  => 'file',
+    owner   => 'root',
+    group   => 'administrators',
+    mode    => '0750',
+    content => epp("${module_name}/scripts/libvirt_backup_cron.rb.epp")
+  }
 
   if $backups {
-    $_backup_list = $backups.map | String $vm_name, Hash $options | {
-      $_backup_dir = has_key($options,'backup_dir') ? {
-        true    => $options['backup_dir'],
-        default => $backup_dir }
-      $_quiesce = has_key($options,'quiesce') ? {
-        true    => $options['quiesce'],
-        default => '' }
-      $_num = has_key($options,'number') ? {
-        true    => $options['number'],
-        default => '' }
-      join([$vm_name,$_num,$_backup_dir,$_quiesce],',')
+    $_backup_list = $backups.map | String $vm_name, Optional[Hash] $options | {
+      $_options = defined('$options') ? {
+        true    =>  merge($default_options,$options),
+        default =>  $default_options
+        }
+      join([$vm_name,$_options['number'],$_options['backup_dir'],$_options['quiesce']],',')
     }
 
     file { $configfile:
@@ -49,7 +61,7 @@ Optional[Hash]                 $backups       = undef
       content =>  epp( "${module_name}/libvirt_backups.conf", 'backup_list' => $_backup_list)
     }
 
-    cron { "Libvirt backups":
+    cron { 'Libvirt backups':
       command     => "${installdir}/libvirt_backup_cron.rb",
       user        => 'root',
       weekday     => 'Saturday',

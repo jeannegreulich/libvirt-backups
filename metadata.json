@@ -1,5 +1,5 @@
 {
-  "name": "libvirt_backups",
+  "name": "jeannegreulich-libvirt_backups",
   "version": "1.0.1",
   "author": "SIMP Team",
   "summary": "manages scripts for vm backups",
@@ -17,8 +17,8 @@
       "version_requirement": ">= 3.9.0 < 4.0.0"
     },
     {
-      "name": "simplib/stdlib",
-      "version_requirement": ">= 4.13.1 < 5.0.0"
+      "name": "puppetlabs/stdlib",
+      "version_requirement": ">= 5.0.0 < 6.0.0"
     }
   ],
   "operatingsystem_support": [

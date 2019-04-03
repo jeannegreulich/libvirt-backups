@@ -31,9 +31,9 @@ def backupdir_exists(dir, name)
 end
 
 def validate_entry(entry)
-   def_backup_dir="/var/backups"
-   def_num_of_backups="3"
-   def_quiesce="no"
+   def_backup_dir="<%= $libvirt_backups::client::backup_dir %>"
+   def_num_of_backups="<%= $libvirt_backups::client::defnum_backups %>"
+   def_quiesce="<%= $libvirt_backups::client::def_quiesce %>"
 
    num_backups = entry[1]
    num_backups.nil? && num_backups = def_num_of_backups
@@ -53,7 +53,7 @@ def validate_entry(entry)
    [num_backups, backup_dir, quiesce]
 end
 
-backup_file="/etc/libvirt_backups.conf"
+backup_file="<%= $libvirt_backups::client::configfile %>"
 
 @slog = Syslog::Logger.new 'libvirt_backup_cron'
 @slog.info "Starting Libvirt Backups"
@@ -74,7 +74,7 @@ File.open(backup_file, "r") do |f|
     if  vm_exists(vm_name)
       num_backups, backup_dir, quiesce = validate_entry(entry)
       next unless backupdir_exists(backup_dir, vm_name)
-      result = system("/usr/local/bin/libvirt_backup.sh #{backup_dir} #{vm_name}  #{quiesce} #{num_backups}")
+      result = system("<%= $libvirt_backups::client::installdir %>/libvirt_backup.sh #{backup_dir} #{vm_name}  #{quiesce} #{num_backups}")
       exit_status = $?.exitstatus
 
       if result

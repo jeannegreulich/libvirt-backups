@@ -8,7 +8,7 @@ def vm_exists(name)
 end
 
 def backupdir_exists(dir, name)
-   puts "Directroy #{dir} and #{name}"
+   puts "Directory #{dir} and #{name}"
    unless  dir.start_with?("/")
     @slog.error "Backup Directory, #{dir} must be an absolute path. libvirt Domain #{name} cannot be backed up."
     return false

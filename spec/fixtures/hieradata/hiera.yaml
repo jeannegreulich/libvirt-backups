@@ -2,7 +2,7 @@
 :backends:
 - yaml
 :yaml:
-  :datadir: "/home/jgreulich/backups/libvirt_backups/libvirt-backups/spec/fixtures/hieradata"
+  :datadir: "/home/jgreulich/yy/libvirt-backups/spec/fixtures/hieradata"
 :hierarchy:
 - "%{custom_hiera}"
 - "%{module_name}"
