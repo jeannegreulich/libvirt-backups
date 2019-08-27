@@ -5,6 +5,7 @@ Stdlib::Absolutepath           $configfile     = '/etc/libvirt_backups.conf',
 Stdlib::Absolutepath           $backup_dir     = '/var/backup',
 Integer[1,10]                  $defnum_backups = 3,
 Enum['yes', 'no']              $def_quiesce    = 'no',
+String                         $backup_group   = 'administrators',
 Optional[Hash]                 $backups        = undef
 )
 {
@@ -65,6 +66,7 @@ Optional[Hash]                 $backups        = undef
       command     => "${installdir}/libvirt_backup_cron.rb",
       user        => 'root',
       weekday     => 'Saturday',
+      minute      => 15,
       hour        => 1,
       environment => "PATH=${installdir}:/bin:/sbin",
     }
