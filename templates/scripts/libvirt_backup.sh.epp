@@ -22,6 +22,7 @@ DOMAIN="$2"
 QUESTAGENT="$3"
 MAXBACKUPS="$4"
 debug="yes"
+BACKUP_GROUP="administrators"
 
 if [ -z "$BACKUPDEST" -o -z "$DOMAIN" ]; then
     error_exit  "Usage: ./vm-backup <backup-folder> <domain> [max-backups]"
@@ -135,6 +136,13 @@ for b in $LIST; do
 
     i=$[$i+1]
 done
+
+#make sure the group si set correctly and make sure
+#random people can't get your backups
+
+chgrp -R $BACKUP_GROUP $BACKUPDOMAIN
+chmod -R g+rX $BACKUPDOMAIN
+chmod -R o-rwX $BACKUPDOMAIN
 
 if [ -f $LOCKFILE ]; then
   rm -f $LOCKFILE
