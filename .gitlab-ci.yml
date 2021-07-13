@@ -1,31 +1,18 @@
-# The testing matrix considers ruby/puppet versions supported by SIMP and PE:
-#
-# https://puppet.com/docs/pe/2018.1/component_versions_in_recent_pe_releases.html
-# https://puppet.com/misc/puppet-enterprise-lifecycle
-# https://puppet.com/docs/pe/2018.1/overview/getting_support_for_pe.html
-# ------------------------------------------------------------------------------
-# Release       Puppet   Ruby   EOL
-# SIMP 6.1      4.10.6   2.1.9  TBD
-# SIMP 6.2      4.10.12  2.1.9  TBD
-# PE 2016.4.15  4.10.12  2.1.9  2018-12 (LTS)
-# PE 2017.3.10  5.3.8    2.4.4  2018-12 (STS)
-# SIMP 6.3      5.5.7    2.4.4  TBD***
-# PE 2018.1     5.5.6    2.4.4  2020-05 (LTS)***
-#
-# *** = Modules created for SIMP 6.3+ are not required to support Puppet < 5.5
 ---
+
 stages:
-  - 'sanity'
   - 'validation'
   - 'acceptance'
-  - 'compliance'
-  - 'deployment'
-
-image: 'ruby:2.4'
 
 variables:
+  # PUPPET_VERSION is a canary variable!
+  #
+  # The value `UNDEFINED` will (intentionally) cause `bundler install|update` to
+  # fail.  The intended value for PUPPET_VERSION is provided by the `pup_#` YAML
+  # anchors.  If it is still `UNDEFINED`, all the other setting from the job's
+  # anchor are also missing.
   PUPPET_VERSION:    'UNDEFINED' # <- Matrixed jobs MUST override this (or fail)
-  BUNDLER_VERSION:   '1.16.1'
+  BUNDLER_VERSION:   '2.2.6'
 
   # Force dependencies into a path the gitlab-runner user can write to.
   # (This avoids some failures on Runners with misconfigured ruby environments.)
@@ -36,69 +23,81 @@ variables:
   BUNDLE_NO_PRUNE:   'true'
 
 
-# bundler dependencies and caching
-#
 # - Cache bundler gems between pipelines foreach Ruby version
 # - Try to use cached and local resources before downloading dependencies
 # --------------------------------------
 .setup_bundler_env: &setup_bundler_env
   cache:
-    untracked: true
     key: "${CI_PROJECT_NAMESPACE}_ruby-${MATRIX_RUBY_VERSION}_bundler"
     paths:
       - '.vendor'
   before_script:
-    - 'ruby -e "puts %(Environment Variables:\n  * #{ENV.keys.grep(/PUPPET|SIMP|BEAKER|MATRIX/).map{|v| %(#{v} = #{ENV[v]})}.join(%(\n  * ))})"'
-    - 'declare GEM_BUNDLER_VER=(-v "~> ${BUNDLER_VERSION:-1.16.0}")'
+    # Print important environment variables that may affect this job
+    - 'ruby -e "puts %(\n\n), %q(=)*80, %(\nSIMP-relevant Environment Variables:\n\n#{e=ENV.keys.grep(/^PUPPET|^SIMP|^BEAKER|MATRIX/); pad=((e.map{|x| x.size}.max||0)+1); e.map{|v| %(    * #{%(#{v}:).ljust(pad)} #{39.chr + ENV[v] + 39.chr}\n)}.join}\n),  %q(=)*80, %(\n\n)" || :'
+
+    - echo -e "\e[0Ksection_start:`date +%s`:before_script10[collapsed=true]\r\e[0KDiagnostic ruby & gem information"
+    # Diagnostic ruby & gem information
+    - 'which ruby && ruby --version || :'
+    - "[[ $- == *i* ]] && echo 'Interactive shell session' || echo 'Non-interactive shell session'"
+    - "shopt -q login_shell && echo 'Login shell' || echo 'Not a login shell'"
+    - 'rvm ls || :'
+    - echo -e "\e[0Ksection_end:`date +%s`:before_script10\r\e[0K"
+
+    # If RVM is available, make SURE it's using the right Ruby:
+    #   * Source rvm (to run in non-login shells)
+    #   * Use $MATRIX_RUBY_VERSION ruby, install if not present
+    - echo -e "\e[0Ksection_start:`date +%s`:before_script20[collapsed=true]\r\e[0KEnsure RVM & ruby is installed"
+    - "if command -v rvm; then if declare -p rvm_path &> /dev/null; then source \"${rvm_path}/scripts/rvm\"; else source \"$HOME/.rvm/scripts/rvm\" || source /etc/profile.d/rvm.sh; fi; fi"
+    - "if command -v rvm && ! grep rvm_install_on_use_flag=1 ~/.rvmrc; then echo rvm_install_on_use_flag=1 >> ~/.rvmrc || echo '== WARNING: ~/.rvmrc is missing rvm_install_on_use_flag=1 and I failed to add it'; fi"
+    - "if command -v rvm; then rvm use \"$MATRIX_RUBY_VERSION\"; else echo \"rvm not detected; skipping 'rvm use'\"; fi"
+    - 'ruby --version || :'
+    - 'gem list sync || :'
+    - echo -e "\e[0Ksection_end:`date +%s`:before_script20\r\e[0K"
+
+    # Bundle gems (preferring cached > local > downloaded resources)
+    #   * Try to use cached and local resources before downloading dependencies
+    - echo -e "\e[0Ksection_start:`date +%s`:before_script30[collapsed=true]\r\e[0KBundle gems (preferring cached > local > downloaded resources)"
+    - 'declare GEM_BUNDLER_VER=(-v "~> ${BUNDLER_VERSION:-2.2.6}")'
     - 'declare GEM_INSTALL_CMD=(gem install --no-document)'
     - 'declare BUNDLER_INSTALL_CMD=(bundle install --no-binstubs --jobs $(nproc) "${FLAGS[@]}")'
     - 'mkdir -p ${GEM_HOME} ${BUNDLER_BIN}'
     - 'gem list -ie "${GEM_BUNDLER_VER[@]}" --silent bundler || "${GEM_INSTALL_CMD[@]}" --local "${GEM_BUNDLER_VER[@]}" bundler || "${GEM_INSTALL_CMD[@]}" "${GEM_BUNDLER_VER[@]}" bundler'
     - 'rm -rf pkg/ || :'
-    - 'bundle check || rm -f Gemfile.lock && ("${BUNDLER_INSTALL_CMD[@]}" --local || "${BUNDLER_INSTALL_CMD[@]}" || bundle pristine ||  "${BUNDLER_INSTALL_CMD[@]}") || echo "PIPELINE: Bundler could not find everything"'
+    - 'bundle check || rm -f Gemfile.lock && ("${BUNDLER_INSTALL_CMD[@]}" --local || "${BUNDLER_INSTALL_CMD[@]}" || bundle pristine ||  "${BUNDLER_INSTALL_CMD[@]}") || { echo "PIPELINE: Bundler could not install everything (see log output above)" && exit 99 ; }'
+    - echo -e "\e[0Ksection_end:`date +%s`:before_script30\r\e[0K"
 
-# To avoid running a prohibitive number of tests every commit,
-# don't set this env var in your gitlab instance
-.only_with_SIMP_FULL_MATRIX: &only_with_SIMP_FULL_MATRIX
-  only:
-    variables:
-      - $SIMP_FULL_MATRIX
+    # Diagnostic bundler, ruby, and gem checks:
+    - echo -e "\e[0Ksection_start:`date +%s`:before_script40[collapsed=true]\r\e[0KDiagnostic bundler, ruby, and gem checks"
+    - 'bundle exec rvm ls || :'
+    - 'bundle exec which ruby || :'
+    - 'bundle show sync || :'
+    - 'bundle exec gem list sync || :'
+    - echo -e "\e[0Ksection_end:`date +%s`:before_script40\r\e[0K"
+
 
 # Puppet Versions
 #-----------------------------------------------------------------------
 
-.pup_5: &pup_5
-  image: 'ruby:2.4'
-  variables:
-    PUPPET_VERSION: '~> 5.0'
-    BEAKER_PUPPET_COLLECTION: 'puppet5'
-    MATRIX_RUBY_VERSION: '2.4'
-
-.pup_5_3: &pup_5_3
-  image: 'ruby:2.4'
-  variables:
-    PUPPET_VERSION: '~> 5.3.0'
-    BEAKER_PUPPET_COLLECTION: 'puppet5'
-    MATRIX_RUBY_VERSION: '2.4'
-
-# Puppet for SIMP 6.3, PE is at 5.5.6 but close enough
-.pup_5_5_7: &pup_5_5_7
-  image: 'ruby:2.4'
-  variables:
-    PUPPET_VERSION: '5.5.7'
-    BEAKER_PUPPET_COLLECTION: 'puppet5'
-    MATRIX_RUBY_VERSION: '2.4'
-
-# Experimental
-#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.pup_6: &pup_6
-  allow_failure: true
-  image: 'ruby:2.4'
+.pup_6_x: &pup_6_x
+  image: 'ruby:2.5'
   variables:
     PUPPET_VERSION: '~> 6.0'
     BEAKER_PUPPET_COLLECTION: 'puppet6'
-    MATRIX_RUBY_VERSION: '2.4'
+    MATRIX_RUBY_VERSION: '2.5'
+
+.pup_6_pe: &pup_6_pe
+  image: 'ruby:2.5'
+  variables:
+    PUPPET_VERSION: '6.18.0'
+    BEAKER_PUPPET_COLLECTION: 'puppet6'
+    MATRIX_RUBY_VERSION: '2.5'
+
+.pup_7_x: &pup_7_x
+  image: 'ruby:2.7'
+  variables:
+    PUPPET_VERSION: '~> 7.0'
+    BEAKER_PUPPET_COLLECTION: 'puppet7'
+    MATRIX_RUBY_VERSION: '2.7'
 
 # Testing Environments
 #-----------------------------------------------------------------------
@@ -119,13 +118,8 @@ variables:
   script:
     - 'bundle exec rake spec'
 
-.acceptance_tests: &acceptance_tests
+.acceptance_base: &acceptance_base
   stage: 'acceptance'
-  tags: ['beaker']
-  <<: *setup_bundler_env
-
-.compliance_tests: &compliance_tests
-  stage: 'compliance'
   tags: ['beaker']
   <<: *setup_bundler_env
 
@@ -133,68 +127,69 @@ variables:
 # Pipeline / testing matrix
 #=======================================================================
 
-sanity_checks:
-  <<: *pup_5
+releng_checks:
+  <<: *pup_6_x
   <<: *setup_bundler_env
-  stage: 'sanity'
+  stage: 'validation'
   tags: ['docker']
   script:
-    - 'if `hash apt-get`; then apt-get update; fi'
-    - 'if `hash apt-get`; then apt-get install -y rpm; fi'
+    - 'command -v rpm || if command -v apt-get; then apt-get update; apt-get install -y rpm; fi ||:'
     - 'bundle exec rake check:dot_underscore'
     - 'bundle exec rake check:test_file'
     - 'bundle exec rake pkg:check_version'
     - 'bundle exec rake pkg:compare_latest_tag'
     - 'bundle exec rake pkg:create_tag_changelog'
-    - 'bundle exec puppet module build'
+    - 'bundle exec pdk build --force --target-dir=dist'
+
 
 # Linting
 #-----------------------------------------------------------------------
 
-pup5-lint:
-  <<: *pup_5
-  <<: *lint_tests
+# NOTE: Don't add more lint checks here.
+#       puppet-lint is a validator, not a parser; it includes its own lexer and
+#       doesn't use the Puppet gem at all.  Running multiple lint tests against
+#       different Puppet versions won't accomplish anything.
 
-pup6-lint:
-  <<: *pup_6
+pup-lint:
+  <<: *pup_6_x
   <<: *lint_tests
 
 # Unit Tests
 #-----------------------------------------------------------------------
-pup5-unit:
-  <<: *pup_5
+
+pup6.x-unit:
+  <<: *pup_6_x
+  <<: *unit_tests
+  <<: *with_SIMP_SPEC_MATRIX_LEVEL_2
+
+pup6.pe-unit:
+  <<: *pup_6_pe
   <<: *unit_tests
 
-pup5_3-unit:
-  <<: *pup_5_3
+pup7.x-unit:
+  <<: *pup_7_x
   <<: *unit_tests
 
-pup5.5.7-unit:
-  <<: *pup_5_5_7
-  <<: *unit_tests
+# ------------------------------------------------------------------------------
+#             NOTICE: **This file is maintained with puppetsync**
+#
+# Everything above the "Repo-specific content" comment will be overwritten by
+# the next puppetsync.
+# ------------------------------------------------------------------------------
 
-pup6-unit:
-  <<: *pup_6
-  <<: *unit_tests
+# Repo-specific content
+# ==============================================================================
 
-# Acceptance Tests
-#-----------------------------------------------------------------------
 
-#pup5.5.7:
-#  <<: *pup_5_5_7
-#  <<: *acceptance_tests
-#  script:
-#    - 'bundle exec rake beaker:suites'
+pup6.x:
+  <<: *pup_6_x
+  <<: *acceptance_base
+  script:
+    - 'bundle exec rake beaker:suites[default]'
 
-#pup5.5.7-fips:
-#  <<: *pup_5_5_7
-#  <<: *acceptance_tests
-#  script:
-#    - 'BEAKER_fips=yes bundle exec rake beaker:suites'
+pup6.x-fips:
+  <<: *pup_6_x
+  <<: *acceptance_base
+  script:
+    - 'BEAKER_fips=yes bundle exec rake beaker:suites[default]'
 
-# No OEL support yet
-#pup5.5.7-oel:
-#  <<: *pup_5_5_7
-#  <<: *acceptance_tests
-#  script:
-#    - 'bundle exec rake beaker:suites[default,oel]'
